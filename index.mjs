@@ -83,10 +83,7 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath, upda
       .toISOString()
       .replace(/:/g, "-")
       .replace(/\./g, "-");
-    const differencesFilePath = path.join(
-      updatesFolderPath,
-      `differences_${timestamp}.json`
-    );
+    const differencesFilePath = `${updatesFolderPath}/differences_${timestamp}.json`;
     await saveToFile(differences, differencesFilePath);
 
     const telegramChannelMessageText = `È stata aggiornata la programmazione dei film all'UCI Cinemas Meridiana di Bologna! 🎥 🍿`;
@@ -151,10 +148,7 @@ export const handler = async (event) => {
       .toISOString()
       .replace(/:/g, "-")
       .replace(/\./g, "-");
-    const newScrapedDataFilePath = path.join(
-      scrapedDataFolderPath,
-      `scraped-data_${timestamp}.json`
-    );
+      const newScrapedDataFilePath = `${scrapedDataFolderPath}/scraped-data_${timestamp}.json`;
   
     getJSON().then(async (data) => {
       const newStructure = createNewStructure(data);

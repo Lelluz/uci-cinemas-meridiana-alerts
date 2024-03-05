@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "aws-sdk": "^2.1569.0",
     "axios": "^1.6.7",
     "lodash-es": "^4.17.21"
   }

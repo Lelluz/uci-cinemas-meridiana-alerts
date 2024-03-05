@@ -150,11 +150,11 @@ export const handler = async (event) => {
       .replace(/\./g, "-");
       const newScrapedDataFilePath = `${scrapedDataFolderPath}/scraped-data_${timestamp}.json`;
   
-    getJSON().then(async (data) => {
-      const newStructure = createNewStructure(data);
-      await saveToFile(newStructure, newScrapedDataFilePath);
-      compareLatestTwoFiles(newStructure)
-    });
+    const data = await getJSON();
+    const newStructure = createNewStructure(data);
+    
+    await saveToFile(newStructure, newScrapedDataFilePath);
+    compareLatestTwoFiles(newStructure)
   } catch (error) {
     console.error("Error in Lambda function:", error);
   }

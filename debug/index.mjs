@@ -1,7 +1,7 @@
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-const _ = require("lodash");
+import axios from "axios";
+import fs from "fs";
+import path from "path";
+import { isEqual, flatMap, differenceWith } from "lodash-es"
 
 const cinemaId = "4" /* Meridiana - Bologna */
 const apiUrl = `https://www.ucicinemas.it/rest/v3/cinemas/${cinemaId}/programming`;
@@ -23,8 +23,8 @@ function saveToFile(data, filePath) {
 }
 
 function createNewStructure(apiResponse) {
-  return _.flatMap(apiResponse, (movie) => {
-    return _.flatMap(movie.events, (event) => {
+  return flatMap(apiResponse, (movie) => {
+    return flatMap(movie.events, (event) => {
       return event.performances.map((performance) => {
         return {
           movieId: movie.movieId,
@@ -49,7 +49,7 @@ function createNewStructure(apiResponse) {
 function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath) {
   if (fs.existsSync(penultimateFilePath)) {
     const penultimateData = JSON.parse(fs.readFileSync(penultimateFilePath));
-    const differences = _.differenceWith(newStructure, penultimateData, _.isEqual);
+    const differences = differenceWith(newStructure, penultimateData, isEqual);
 
     if (differences.length > 0) {
       console.log("Differences detected.");

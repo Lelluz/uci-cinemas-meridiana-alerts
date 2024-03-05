@@ -1,4 +1,4 @@
-const _ = require("lodash");
+import { isEqual, flatMap, differenceWith } from "lodash-es"
 import axios from "axios";
 import { S3 } from "@aws-sdk/client-s3";
 
@@ -39,8 +39,8 @@ async function saveToFile(data, filePath) {
 }
 
 function createNewStructure(apiResponse) {
-  return _.flatMap(apiResponse, (movie) => {
-    return _.flatMap(movie.events, (event) => {
+  return flatMap(apiResponse, (movie) => {
+    return flatMap(movie.events, (event) => {
       return event.performances.map((performance) => {
         return {
           movieId: movie.movieId,
@@ -74,7 +74,7 @@ async function getObjectFromS3(filePath) {
 
 async function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath) {
   const penultimateS3FileObj = await getObjectFromS3(penultimateFilePath);
-  const differences = _.differenceWith(newStructure, penultimateS3FileObj, _.isEqual);
+  const differences = differenceWith(newStructure, penultimateS3FileObj, isEqual);
 
   if (differences.length > 0) {
     console.log("Differences detected.");

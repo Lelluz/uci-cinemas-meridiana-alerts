@@ -4,6 +4,6 @@
     "axios": "^1.6.7",
     "deep-equal": "^2.2.3",
     "deep-object-diff": "^1.1.9",
-    "lodash": "^4.17.21"
+    "lodash-es": "^4.17.21"
   }
 }

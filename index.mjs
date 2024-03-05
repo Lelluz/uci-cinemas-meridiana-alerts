@@ -3,15 +3,15 @@ import axios from "axios";
 import { S3 } from "@aws-sdk/client-s3";
 
 const s3 = new S3({ region: "eu-south-1" });
-const bucketName = "uci-cinemas-imax-scraper-bucket-milan";
+const bucketName = process.env.BUCKET_NAME;
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHANNEL_CHAT_ID;
+const cinemaId = process.env.CINEMA_ID;
+const bearerToken = process.env.UCI_BEARER_TOKEN;
 
-const cinemaId = "4" /* Meridiana - Bologna */
 const apiUrl = `https://www.ucicinemas.it/rest/v3/cinemas/${cinemaId}/programming`;
 const scrapedDataFolderPath = "scraped-data";
 const updatesFolderPath = "differences-data";
-const bearerToken = "SkAkzoScIbhb3uNcGdk8UL0XMIbvs5";
 
 async function getJSON() {
   const { data: jsonData } = await axios.get(apiUrl, {

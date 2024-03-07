@@ -1,4 +1,4 @@
-import { isEqual, flatMap, differenceWith } from "lodash-es"
+import { flatMap, pick } from "lodash-es"
 import axios from "axios";
 import { S3 } from "@aws-sdk/client-s3";
 
@@ -12,6 +12,10 @@ const bearerToken = process.env.UCI_BEARER_TOKEN;
 const apiUrl = `https://www.ucicinemas.it/rest/v3/cinemas/${cinemaId}/programming`;
 const scrapedDataFolderPath = "scraped-data";
 const updatesFolderPath = "differences-data";
+
+function compareArray(array1, array2) {
+  return array2.filter(valore => !array1.includes(valore));;
+}
 
 async function getJSON() {
   const { data: jsonData } = await axios.get(apiUrl, {
@@ -56,6 +60,7 @@ function createNewStructure(apiResponse) {
           webUrl: event.webUrl,
           buyUrl: performance.buyUrl,
           moviePosterMedium: movie.moviePosterMedium,
+          performanceData: `${movie.movieId}~${event.eventId}~${event.date}~${performance.time}`
         };
       });
     });
@@ -74,19 +79,51 @@ async function getObjectFromS3(filePath) {
 
 async function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath) {
   const penultimateS3FileObj = await getObjectFromS3(penultimateFilePath);
-  const differences = differenceWith(newStructure, penultimateS3FileObj, isEqual);
+  const penultimateDataPerformances = JSON.parse(penultimateS3FileObj).map(film => film.performanceData);
+  const newStructureDataPerformances = newStructure.map(film => film.performanceData);
+  const differences = compareArray(penultimateDataPerformances, newStructureDataPerformances);
 
   if (differences.length > 0) {
     console.log("Differences detected.");
+
+    const differencesFullData = differences.map(difference => {
+      const differenceFileds = difference.split('~');
+      const movieId = parseInt(differenceFileds[0]);
+      const eventId = parseInt(differenceFileds[1]);
+      const date = differenceFileds[2];
+      const time = differenceFileds[3];
+      const movieInfoRaw = newStructure.find(film => film.movieId === movieId);
+      const movieInfo = pick(movieInfoRaw, [
+        "name",
+        "moviePath",
+        "screen",
+        "webUrl",
+        "buyUrl",
+        "moviePosterMedium"
+      ]);
+      return({movieId, eventId, movieInfo, date, time});
+    })
 
     const timestamp = new Date()
       .toISOString()
       .replace(/:/g, "-")
       .replace(/\./g, "-");
     const differencesFilePath = `${updatesFolderPath}/differences_${timestamp}.json`;
-    await saveToFile(differences, differencesFilePath);
+    await saveToFile(differencesFullData, differencesFilePath);
 
-    const telegramChannelMessageText = `È stata aggiornata la programmazione dei film all'UCI Cinemas Meridiana di Bologna! 🎥 🍿`;
+    const telegramChannelMessageText = `
+    È stata aggiornata la programmazione dei film all'UCI Cinemas Meridiana di Bologna! 🎥 🍿
+    
+    ${differencesFullData
+      .map(
+        (film) => `
+          Film: ${film.movieInfo.movieTitle}
+          Data: ${film.movieInfo.date}
+          Orario: ${film.movieInfo.time}
+        `
+      )
+      .join(`______________`)}
+    `;
     await sendTelegramAlert(telegramChannelMessageText);
 
   } else {

@@ -1,7 +1,7 @@
 import axios from "axios";
 import fs from "fs";
 import path from "path";
-import { isEqual, flatMap, differenceWith } from "lodash-es"
+import { isEqual, flatMap, differenceWith, pick } from "lodash-es"
 
 const cinemaId = "4" /* Meridiana - Bologna */
 const apiUrl = `https://www.ucicinemas.it/rest/v3/cinemas/${cinemaId}/programming`;
@@ -16,6 +16,10 @@ async function getJSON() {
     },
   });
   return jsonData;
+}
+
+function compareArray(array1, array2) {
+  return array2.filter(valore => !array1.includes(valore));;
 }
 
 function saveToFile(data, filePath) {
@@ -40,6 +44,7 @@ function createNewStructure(apiResponse) {
           webUrl: event.webUrl,
           buyUrl: performance.buyUrl,
           moviePosterMedium: movie.moviePosterMedium,
+          performanceData: `${movie.movieId}~${event.eventId}~${event.date}~${performance.time}`
         };
       });
     });
@@ -49,10 +54,30 @@ function createNewStructure(apiResponse) {
 function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath) {
   if (fs.existsSync(penultimateFilePath)) {
     const penultimateData = JSON.parse(fs.readFileSync(penultimateFilePath));
-    const differences = differenceWith(newStructure, penultimateData, isEqual);
+    const penultimateDataPerformances = penultimateData.map(film => film.performanceData);
+    const newStructureDataPerformances = newStructure.map(film => film.performanceData);
+    const differences = compareArray(penultimateDataPerformances, newStructureDataPerformances);
 
     if (differences.length > 0) {
       console.log("Differences detected.");
+
+      const differencesFullData = differences.map(difference => {
+        const differenceFileds = difference.split('~');
+        const movieId = parseInt(differenceFileds[0]);
+        const eventId = parseInt(differenceFileds[1]);
+        const date = differenceFileds[2];
+        const time = differenceFileds[3];
+        const movieInfoRaw = newStructure.find(film => film.movieId === movieId);
+        const movieInfo = pick(movieInfoRaw, [
+          "name",
+          "moviePath",
+          "screen",
+          "webUrl",
+          "buyUrl",
+          "moviePosterMedium"
+        ]);
+        return({movieId, eventId, movieInfo, date, time});
+      })
 
       const timestamp = new Date()
         .toISOString()
@@ -65,7 +90,7 @@ function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFol
 
       fs.writeFileSync(
         differencesFilePath,
-        JSON.stringify(differences, null, 2)
+        JSON.stringify(differencesFullData, null, 2)
       );
     } else {
       console.log("No differences found.");

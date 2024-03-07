@@ -1,6 +1,7 @@
 import { flatMap, pick } from "lodash-es"
 import axios from "axios";
 import { S3 } from "@aws-sdk/client-s3";
+import moment from "moment"
 
 const s3 = new S3({ region: "eu-south-1" });
 const bucketName = process.env.BUCKET_NAME;
@@ -59,7 +60,7 @@ function createNewStructure(apiResponse) {
           screen: performance.screen,
           webUrl: event.webUrl,
           buyUrl: performance.buyUrl,
-          moviePosterMedium: movie.moviePosterMedium,
+          moviePosterOriginal: movie.moviePosterOriginal,
           performanceData: `${movie.movieId}~${event.eventId}~${event.date}~${performance.time}`
         };
       });
@@ -77,7 +78,7 @@ async function getObjectFromS3(filePath) {
   }
 }
 
-async function compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath) {
+async function compareAndSaveDifferences(newStructure, penultimateFilePath) {
   const penultimateS3FileObj = await getObjectFromS3(penultimateFilePath);
   const penultimateDataPerformances = JSON.parse(penultimateS3FileObj).map(film => film.performanceData);
   const newStructureDataPerformances = newStructure.map(film => film.performanceData);
@@ -95,11 +96,8 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath, upda
       const movieInfoRaw = newStructure.find(film => film.movieId === movieId);
       const movieInfo = pick(movieInfoRaw, [
         "name",
-        "moviePath",
-        "screen",
         "webUrl",
-        "buyUrl",
-        "moviePosterMedium"
+        "moviePosterOriginal"
       ]);
       return({movieId, eventId, movieInfo, date, time});
     })
@@ -108,34 +106,31 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath, upda
       .toISOString()
       .replace(/:/g, "-")
       .replace(/\./g, "-");
-    const differencesFilePath = `${updatesFolderPath}/differences_${timestamp}.json`;
-    await saveToFile(differencesFullData, differencesFilePath);
 
-    const telegramChannelMessageText = `
-    È stata aggiornata la programmazione dei film all'UCI Cinemas Meridiana di Bologna! 🎥 🍿
-    
-    ${differencesFullData
-      .map(
-        (film) => `
-          Film: ${film.movieInfo.movieTitle}
-          Data: ${film.movieInfo.date}
-          Orario: ${film.movieInfo.time}
-        `
-      )
-      .join(`______________`)}
-    `;
-    await sendTelegramAlert(telegramChannelMessageText);
+    await saveToFile(differencesFullData, `${updatesFolderPath}/differences_${timestamp}.json`);
 
+    differencesFullData.forEach(async film => {
+      const telegramChannelMessageText =
+      `${film.movieInfo.name}
+
+Data: ${new Date(film.date).toLocaleDateString('it-IT')}
+Orario: ${film.time}
+
+${film.movieInfo.webUrl}
+`;
+      await sendTelegramAlert(telegramChannelMessageText, film.movieInfo.moviePosterOriginal);
+    });
   } else {
     console.log("No differences found.");
   }
 }
 
-async function sendTelegramAlert(message) {
-  const apiUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+async function sendTelegramAlert(message, photoUrl) {
+  const apiUrl = `https://api.telegram.org/bot${telegramToken}/sendPhoto`;
   const params = {
     chat_id: telegramChatId,
-    text: message,
+    photo: photoUrl,
+    caption: message,
   };
 
   try {
@@ -172,10 +167,37 @@ async function compareLatestTwoFiles (newStructure) {
       const latestFilePath = latestFile.Key;
       const penultimateFilePath = penultimateFile.Key;
 
-      compareAndSaveDifferences(newStructure, penultimateFilePath, updatesFolderPath);
+      compareAndSaveDifferences(newStructure, penultimateFilePath);
     }
   } catch (error) {
     console.error("Error in file comparison:", error);
+  }
+}
+
+async function deleteAllOldFilesInFolder(folderPath) {
+  try {
+    const objects = await s3.listObjectsV2({ Bucket: bucketName, Prefix: folderPath });
+    const oneHourAgo = moment().subtract(1, 'hours');
+
+    for (const obj of objects.Contents || []) {
+        const lastModified = moment(obj.LastModified);
+
+        if (lastModified.isBefore(oneHourAgo)) {
+            await s3.deleteObject({ Bucket: bucketName, Key: obj.Key });
+        }
+    }
+
+    console.log('File eliminati con successo.');
+    return {
+        statusCode: 200,
+        body: JSON.stringify('Operazione completata con successo.'),
+    };
+  } catch (error) {
+      console.error('Errore durante l\'eliminazione dei file:', error);
+      return {
+          statusCode: 500,
+          body: JSON.stringify('Errore durante l\'eliminazione dei file.'),
+      };
   }
 }
 
@@ -187,11 +209,14 @@ export const handler = async (event) => {
       .replace(/\./g, "-");
       const newScrapedDataFilePath = `${scrapedDataFolderPath}/scraped-data_${timestamp}.json`;
   
-    const data = await getJSON();
-    const newStructure = createNewStructure(data);
+    const allData = await getJSON();
+    const newStructure = createNewStructure(allData);
     
     await saveToFile(newStructure, newScrapedDataFilePath);
-    compareLatestTwoFiles(newStructure)
+    await compareLatestTwoFiles(newStructure);
+    await deleteAllOldFilesInFolder(scrapedDataFolderPath);
+    await deleteAllOldFilesInFolder(updatesFolderPath);
+
   } catch (error) {
     console.error("Error in Lambda function:", error);
   }

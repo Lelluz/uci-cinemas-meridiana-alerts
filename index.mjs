@@ -108,9 +108,15 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath) {
       .replace(/\./g, "-");
 
     await saveToFile(differencesFullData, `${updatesFolderPath}/differences_${timestamp}.json`);
+    await processFilms(differencesFullData);
+  } else {
+    console.log("No differences found.");
+  }
+}
 
-    differencesFullData.forEach(async film => {
-      const telegramChannelMessageText =
+async function processFilms(differencesFullData) {
+  for (const film of differencesFullData) {
+    const telegramChannelMessageText =
       `${film.movieInfo.name}
 
 Data: ${new Date(film.date).toLocaleDateString('it-IT')}
@@ -118,10 +124,8 @@ Orario: ${film.time}
 
 ${film.movieInfo.webUrl}
 `;
-      await sendTelegramAlert(telegramChannelMessageText, film.movieInfo.moviePosterOriginal);
-    });
-  } else {
-    console.log("No differences found.");
+    console.log('BEFORE sendTelegramAlert')
+    await sendTelegramAlert(telegramChannelMessageText, film.movieInfo.moviePosterOriginal);
   }
 }
 
@@ -136,6 +140,7 @@ async function sendTelegramAlert(message, photoUrl) {
   try {
     const response = await axios.post(apiUrl, params);
 
+    console.log('BEFORE RETURN sendTelegramAlert');
     return {
       statusCode: response.status,
       body: JSON.stringify(response.data),
@@ -167,7 +172,7 @@ async function compareLatestTwoFiles (newStructure) {
       const latestFilePath = latestFile.Key;
       const penultimateFilePath = penultimateFile.Key;
 
-      compareAndSaveDifferences(newStructure, penultimateFilePath);
+      await compareAndSaveDifferences(newStructure, penultimateFilePath);
     }
   } catch (error) {
     console.error("Error in file comparison:", error);

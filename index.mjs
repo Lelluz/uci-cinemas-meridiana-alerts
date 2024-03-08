@@ -93,10 +93,12 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath) {
       const eventId = parseInt(differenceFileds[1]);
       const date = differenceFileds[2];
       const time = differenceFileds[3];
-      const movieInfoRaw = newStructure.find(film => film.movieId === movieId);
+      const movieInfoRaw = newStructure.find(film => film.performanceData === difference);
       const movieInfo = pick(movieInfoRaw, [
         "name",
         "webUrl",
+        "buyUrl",
+        "screen",
         "moviePosterOriginal"
       ]);
       return({movieId, eventId, movieInfo, date, time});
@@ -119,12 +121,16 @@ async function processFilms(differencesFullData) {
     const telegramChannelMessageText =
       `${film.movieInfo.name}
 
+
 Data: ${new Date(film.date).toLocaleDateString('it-IT')}
 Orario: ${film.time}
+Sala: ${film.movieInfo.screen}
 
 ${film.movieInfo.webUrl}
+
+Biglietti:
+${film.movieInfo.buyUrl}
 `;
-    console.log('BEFORE sendTelegramAlert')
     await sendTelegramAlert(telegramChannelMessageText, film.movieInfo.moviePosterOriginal);
   }
 }
@@ -139,8 +145,6 @@ async function sendTelegramAlert(message, photoUrl) {
 
   try {
     const response = await axios.post(apiUrl, params);
-
-    console.log('BEFORE RETURN sendTelegramAlert');
     return {
       statusCode: response.status,
       body: JSON.stringify(response.data),

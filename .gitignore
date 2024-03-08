@@ -1,4 +1,4 @@
 node_modules
-debug
+local-tests
 scraped-data
 differences-data

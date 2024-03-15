@@ -3,25 +3,24 @@ import axios from "axios";
 import { S3 } from "@aws-sdk/client-s3";
 import moment from "moment"
 
-const s3 = new S3({ region: "eu-south-1" });
-const bucketName = process.env.BUCKET_NAME;
-const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-const telegramChatId = process.env.TELEGRAM_CHANNEL_CHAT_ID;
-const cinemaId = process.env.CINEMA_ID;
-const bearerToken = process.env.UCI_BEARER_TOKEN;
-
-const apiUrl = `https://www.ucicinemas.it/rest/v3/cinemas/${cinemaId}/programming`;
-const scrapedDataFolderPath = "scraped-data";
-const updatesFolderPath = "differences-data";
+const S3_CLIENT = new S3({ region: "eu-south-1" });
+const BUCKET_NAME = process.env.BUCKET_NAME;
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHANNEL_CHAT_ID;
+const CINEMA_ID = process.env.CINEMA_ID;
+const BEARER_TOKEN = process.env.UCI_BEARER_TOKEN;
+const UCI_PROGRAMMING_API_URL = `https://www.ucicinemas.it/rest/v3/cinemas/${CINEMA_ID}/programming`;
+const PROGRAMMING_DATA_FOLDER_PATH = "programming-data";
+const DIFFERENCES_DATA_FOLDER_PATH = "differences-data";
 
 function compareArray(array1, array2) {
   return array2.filter(valore => !array1.includes(valore));;
 }
 
 async function getJSON() {
-  const { data: jsonData } = await axios.get(apiUrl, {
+  const { data: jsonData } = await axios.get(UCI_PROGRAMMING_API_URL, {
     headers: {
-      Authorization: `Bearer ${bearerToken}`,
+      Authorization: `Bearer ${BEARER_TOKEN}`,
     },
   });
   return jsonData;
@@ -29,13 +28,13 @@ async function getJSON() {
 
 async function saveToFile(data, filePath) {
   const params = {
-    Bucket: bucketName,
+    Bucket: BUCKET_NAME,
     Key: filePath,
     Body: JSON.stringify(data, null, 2),
   };
 
   try {
-    const response = await s3.putObject(params);
+    const response = await S3_CLIENT.putObject(params);
     console.log("File saved successfully.", response);
   } catch (error) {
     console.error("Error uploading file to S3:", error);
@@ -43,7 +42,7 @@ async function saveToFile(data, filePath) {
   }
 }
 
-function createNewStructure(apiResponse) {
+function createLightProgrammingStructure(apiResponse) {
   return flatMap(apiResponse, (movie) => {
     return flatMap(movie.events, (event) => {
       return event.performances.map((performance) => {
@@ -51,11 +50,8 @@ function createNewStructure(apiResponse) {
           movieId: movie.movieId,
           eventId: event.eventId,
           name: movie.name,
-          isPurchasable: movie.isPurchasable,
-          firstPerformance: movie.firstPerformance,
           date: event.date,
           time: performance.time,
-          movieNew: event.movieNew,
           moviePath: event.moviePath,
           screen: performance.screen,
           webUrl: event.webUrl,
@@ -70,7 +66,7 @@ function createNewStructure(apiResponse) {
 
 async function getObjectFromS3(filePath) {
   try {
-    const response = await s3.getObject({ Bucket: bucketName, Key: filePath });
+    const response = await S3_CLIENT.getObject({ Bucket: BUCKET_NAME, Key: filePath });
     return await response.Body?.transformToString();
   } catch (error) {
     console.error("Error retrieving object from S3:", error);
@@ -109,7 +105,8 @@ async function compareAndSaveDifferences(newStructure, penultimateFilePath) {
       .replace(/:/g, "-")
       .replace(/\./g, "-");
 
-    await saveToFile(differencesFullData, `${updatesFolderPath}/differences_${timestamp}.json`);
+    await saveToFile(newStructure, `${PROGRAMMING_DATA_FOLDER_PATH}/programming-data_${timestamp}.json`);
+    await saveToFile(differencesFullData, `${DIFFERENCES_DATA_FOLDER_PATH}/differences_${timestamp}.json`);
     await processFilms(differencesFullData);
   } else {
     console.log("No differences found.");
@@ -136,9 +133,9 @@ ${film.movieInfo.buyUrl}
 }
 
 async function sendTelegramAlert(message, photoUrl) {
-  const apiUrl = `https://api.telegram.org/bot${telegramToken}/sendPhoto`;
+  const apiUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`;
   const params = {
-    chat_id: telegramChatId,
+    chat_id: TELEGRAM_CHAT_ID,
     photo: photoUrl,
     caption: message,
   };
@@ -161,22 +158,22 @@ async function sendTelegramAlert(message, photoUrl) {
 
 async function compareLatestTwoFiles (newStructure) {
   const params = {
-    Bucket: bucketName,
-    Prefix: scrapedDataFolderPath,
+    Bucket: BUCKET_NAME,
+    Prefix: PROGRAMMING_DATA_FOLDER_PATH,
   };
 
   try {
-    const data = await s3.listObjectsV2(params);
-    const scrapedDataFiles = data.Contents.sort(
+    const data = await S3_CLIENT.listObjectsV2(params);
+    const programmingDataFiles = data.Contents.sort(
       (a, b) => b.LastModified - a.LastModified
     );
-    const [latestFile, penultimateFile] = scrapedDataFiles.slice(0, 2);
+    const [latestFile, penultimateFile] = programmingDataFiles.slice(0, 2);
 
     if (latestFile && penultimateFile) {
       const latestFilePath = latestFile.Key;
       const penultimateFilePath = penultimateFile.Key;
 
-      await compareAndSaveDifferences(newStructure, penultimateFilePath);
+      await compareAndSaveDifferences(newStructure, latestFilePath);
     }
   } catch (error) {
     console.error("Error in file comparison:", error);
@@ -185,14 +182,14 @@ async function compareLatestTwoFiles (newStructure) {
 
 async function deleteAllOldFilesInFolder(folderPath) {
   try {
-    const objects = await s3.listObjectsV2({ Bucket: bucketName, Prefix: folderPath });
-    const oneHourAgo = moment().subtract(1, 'hours');
+    const objects = await S3_CLIENT.listObjectsV2({ Bucket: BUCKET_NAME, Prefix: folderPath });
+    const threeDaysAgo = moment().subtract(36, 'hours');
 
     for (const obj of objects.Contents || []) {
         const lastModified = moment(obj.LastModified);
 
-        if (lastModified.isBefore(oneHourAgo)) {
-            await s3.deleteObject({ Bucket: bucketName, Key: obj.Key });
+        if (lastModified.isBefore(threeDaysAgo)) {
+            await S3_CLIENT.deleteObject({ Bucket: BUCKET_NAME, Key: obj.Key });
         }
     }
 
@@ -212,19 +209,12 @@ async function deleteAllOldFilesInFolder(folderPath) {
 
 export const handler = async (event) => {
   try {
-      const timestamp = new Date()
-      .toISOString()
-      .replace(/:/g, "-")
-      .replace(/\./g, "-");
-      const newScrapedDataFilePath = `${scrapedDataFolderPath}/scraped-data_${timestamp}.json`;
-  
     const allData = await getJSON();
-    const newStructure = createNewStructure(allData);
+    const lightProgrammingStructure = createLightProgrammingStructure(allData);
     
-    await saveToFile(newStructure, newScrapedDataFilePath);
-    await compareLatestTwoFiles(newStructure);
-    await deleteAllOldFilesInFolder(scrapedDataFolderPath);
-    await deleteAllOldFilesInFolder(updatesFolderPath);
+    await compareLatestTwoFiles(lightProgrammingStructure);
+    await deleteAllOldFilesInFolder(PROGRAMMING_DATA_FOLDER_PATH);
+    await deleteAllOldFilesInFolder(DIFFERENCES_DATA_FOLDER_PATH);
 
   } catch (error) {
     console.error("Error in Lambda function:", error);

@@ -183,7 +183,7 @@ async function compareLatestTwoFiles (newStructure) {
 async function deleteAllOldFilesInFolder(folderPath) {
   try {
     const objects = await S3_CLIENT.listObjectsV2({ Bucket: BUCKET_NAME, Prefix: folderPath });
-    const threeDaysAgo = moment().subtract(36, 'hours');
+    const threeDaysAgo = moment().subtract(72, 'hours');
 
     for (const obj of objects.Contents || []) {
         const lastModified = moment(obj.LastModified);

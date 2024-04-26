@@ -206,12 +206,12 @@ async function deleteAllOldFilesInFolder(folderPath) {
       Bucket: BUCKET_NAME,
       Prefix: folderPath,
     })
-    const threeDaysAgo = moment().subtract(72, 'hours')
+    const purgatoryTime = moment().subtract(144, 'hours')
 
     for (const obj of objects.Contents || []) {
       const lastModified = moment(obj.LastModified)
 
-      if (lastModified.isBefore(threeDaysAgo)) {
+      if (lastModified.isBefore(purgatoryTime)) {
         await S3_CLIENT.deleteObject({
           Bucket: BUCKET_NAME,
           Key: obj.Key,

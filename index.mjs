@@ -183,7 +183,12 @@ async function compareLatestTwoFiles(newStructure) {
   }
 
   try {
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/:/g, '-')
+      .replace(/\./g, '-')
     const data = await S3_CLIENT.listObjectsV2(params)
+
     if (!data || !data.Contents || data.Contents.length === 0) {
       console.log('No files found.')
       await saveToFile(

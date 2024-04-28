@@ -184,17 +184,33 @@ async function compareLatestTwoFiles(newStructure) {
 
   try {
     const data = await S3_CLIENT.listObjectsV2(params)
+    if (!data.Contents.length) {
+      console.log('No files found.')
+      await saveToFile(
+        newStructure,
+        `${PROGRAMMING_DATA_FOLDER_PATH}/programming-data_${timestamp}.json`
+      )
+      return
+    }
+
     const programmingDataFiles = data.Contents.sort(
-      (a, b) => b.LastModified - a.LastModified
+      (a, b) => new Date(b.LastModified) - new Date(a.LastModified)
     )
     const [latestFile, penultimateFile] = programmingDataFiles.slice(0, 2)
 
-    if (latestFile && penultimateFile) {
-      const latestFilePath = latestFile.Key
-      const penultimateFilePath = penultimateFile.Key
-
-      await compareAndSaveDifferences(newStructure, latestFilePath)
+    if (!latestFile || !penultimateFile) {
+      console.log('There are not enough files to make a comparison.')
+      await saveToFile(
+        newStructure,
+        `${PROGRAMMING_DATA_FOLDER_PATH}/programming-data_${timestamp}.json`
+      )
+      return
     }
+
+    const latestFilePath = latestFile.Key
+    const penultimateFilePath = penultimateFile.Key
+
+    await compareAndSaveDifferences(newStructure, latestFilePath)
   } catch (error) {
     console.error('Error in file comparison:', error)
   }

@@ -184,7 +184,7 @@ async function compareLatestTwoFiles(newStructure) {
 
   try {
     const data = await S3_CLIENT.listObjectsV2(params)
-    if (!data.Contents.length) {
+    if (!data || !data.Contents || data.Contents.length === 0) {
       console.log('No files found.')
       await saveToFile(
         newStructure,

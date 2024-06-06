@@ -21,6 +21,9 @@ async function getJSON() {
   const { data: jsonData } = await axios.get(UCI_PROGRAMMING_API_URL, {
     headers: {
       Authorization: `Bearer ${BEARER_TOKEN}`,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Accept': 'application/json',
+      'Accept-Language': 'it-IT,it;q=0.9',
     },
   })
   return jsonData

@@ -2,6 +2,7 @@ import { flatMap, pick } from 'lodash-es'
 import axios from 'axios'
 import { S3 } from '@aws-sdk/client-s3'
 import moment from 'moment'
+import puppeteer from 'puppeteer'
 
 const S3_CLIENT = new S3({ region: 'eu-south-1' })
 const BUCKET_NAME = process.env.BUCKET_NAME
@@ -18,15 +19,27 @@ function compareArray(array1, array2) {
 }
 
 async function getJSON() {
-  const { data: jsonData } = await axios.get(UCI_PROGRAMMING_API_URL, {
-    headers: {
-      Authorization: `Bearer ${BEARER_TOKEN}`,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Accept': 'application/json',
-      'Accept-Language': 'it-IT,it;q=0.9',
-    },
-  })
-  return jsonData
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+  const page = await browser.newPage();
+
+  await page.setExtraHTTPHeaders({
+    'Authorization': `Bearer ${BEARER_TOKEN}`,
+  });
+
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+  
+  await page.goto(UCI_PROGRAMMING_API_URL, {
+    waitUntil: 'networkidle2'
+  });
+
+  const jsonData = await page.evaluate(() => {
+    return JSON.parse(document.body.innerText);
+  });
+
+  await browser.close();
+  return jsonData;
 }
 
 async function saveToFile(data, filePath) {
